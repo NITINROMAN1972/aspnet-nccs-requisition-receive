@@ -50,3 +50,14 @@
 .select2-selection__arrow {
     height: 34px !important;
 }
+
+
+.ChkBoxClass input {
+    width: 60px;
+    height: 60px;
+}
+
+#chkAvailStatus {
+    width: 60px;
+    height: 60px;
+}

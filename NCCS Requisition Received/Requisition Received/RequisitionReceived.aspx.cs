@@ -7,6 +7,7 @@ using System.Data.SqlTypes;
 using System.Linq;
 using System.Web;
 using System.Web.UI;
+using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
 
 public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Page
@@ -15,8 +16,14 @@ public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Pa
 
     protected void Page_Load(object sender, EventArgs e)
     {
+        if (Session["UserID"] == null)
+        {
+            Response.Redirect("http://101.53.144.92/nccs/Ginie/Render/Login");
+        }
+
         if (!IsPostBack)
         {
+
             Search_DD_RequistionNo();
         }
     }
@@ -44,7 +51,6 @@ public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Pa
 
 
     //=========================={ Sweet Alert JS }==========================
-    // sweet alert - success only
     private void getSweetAlertSuccessOnly()
     {
         string title = "Saved!";
@@ -233,7 +239,12 @@ public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Pa
         {
             connection.Open();
 
-            string sql = "SELECT * FROM Requisition1891 WHERE 1=1";
+            //string sql = "SELECT * FROM Requisition1891 WHERE 1=1";
+            string sql = $@"SELECT *, org.OrgTyp 
+                            FROM Requisition1891 as req1 
+                            INNER JOIN Requisition2891 as req2 ON req1.RefNo = req2.BillRefNo 
+                            INNER JOIN OrgType891 as org ON req2.OrgType = org.RefID 
+                            WHERE 1=1";
 
             if (!string.IsNullOrEmpty(requisitionNo))
             {
@@ -250,7 +261,7 @@ public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Pa
                 sql += " AND ReqDte <= @ToDate";
             }
 
-            sql += " ORDER BY RefNo DESC";
+            sql += " ORDER BY req1.RefNo DESC";
 
 
 
@@ -278,6 +289,32 @@ public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Pa
                     adapter.Fill(dt);
                     return dt;
                 }
+            }
+        }
+    }
+
+
+
+
+    //=========================={ Item Grid OnRowDataBound }==========================
+    protected void ItemGrid_RowDataBound(object sender, GridViewRowEventArgs e)
+    {
+        if (e.Row.RowType == DataControlRowType.DataRow && (e.Row.RowState & DataControlRowState.Edit) > 0)
+        {
+            // Set all row in edit mode
+            //e.Row.RowState = e.Row.RowState ^ DataControlRowState.Edit;
+
+            int rowIndex = e.Row.RowIndex;
+            TextBox txtAvailableQty = (TextBox)e.Row.FindControl("txtAvailableQty");
+            DataRowView rowView = (DataRowView)e.Row.DataItem;
+
+            if (rowView != null)
+            {
+                // Retrieve AvailableQty value from the data source
+                string availableQty = rowView["AvailableQty"].ToString();
+
+                // Set the value to the TextBox
+                txtAvailableQty.Text = availableQty;
             }
         }
     }
@@ -337,6 +374,7 @@ public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Pa
                             from Requisition2891 as req 
                             INNER JOIN ServMaster891 as service ON req.ServiceName = service.RefID 
                             where BillRefNo = @BillRefNo";
+
             SqlCommand cmd = new SqlCommand(sql, con);
             cmd.Parameters.AddWithValue("@BillRefNo", requisitionRefNo.ToString());
             cmd.ExecuteNonQuery();
@@ -344,13 +382,111 @@ public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Pa
             SqlDataAdapter ad = new SqlDataAdapter(cmd);
             DataTable dt = new DataTable();
             ad.Fill(dt);
+
+            // manually adding new custom editable column
+            dt.Columns.Add("AvailableQty", typeof(string));
+
+            // adding the new column with checkboxes
+            DataColumn checkboxColumn = new DataColumn("AvailableStatus", typeof(bool));
+            checkboxColumn.DefaultValue = false;
+            dt.Columns.Add(checkboxColumn);
+
             con.Close();
 
             itemGrid.DataSource = dt;
             itemGrid.DataBind();
 
+            CheckingForCheckboxStatus(dt);
+
             ViewState["ReqDetailsVS"] = dt;
             Session["ReqDetails"] = dt;
+
+            // total service amount
+            //double? totalServiceAmount = dt.AsEnumerable().Sum(row => row["ServicePrice"] is DBNull ? (double?)null : Convert.ToDouble(row["ServicePrice"])) ?? 0.0;
+            //TotalServiceAmnt.Text = totalServiceAmount.HasValue ? totalServiceAmount.Value.ToString("N2") : "0.00";
+        }
+    }
+
+    private void CheckingForCheckboxStatus(DataTable Requisition2DT)
+    {
+        DataTable ReqReceivedDT = new DataTable();
+
+        foreach (DataRow row in Requisition2DT.Rows)
+        {
+            string requisition2Refno = row["RefNo"].ToString();
+
+            using (SqlConnection con = new SqlConnection(connectionString))
+            {
+                string sql = "SELECT * FROM ReqReceived891 WHERE Req2RefNo = @Req2RefNo";
+
+                SqlCommand cmd = new SqlCommand(sql, con);
+                cmd.Parameters.AddWithValue("@Req2RefNo", requisition2Refno);
+                con.Open();
+
+                SqlDataAdapter ad = new SqlDataAdapter(cmd);
+                ad.Fill(ReqReceivedDT);
+            }
+
+            // checking prechecked checkbox
+            foreach (DataRow reqReceivedRow in ReqReceivedDT.Rows)
+            {
+                bool availableStatus = Convert.ToBoolean(reqReceivedRow["AvailableStatus"]);
+
+
+                HtmlInputCheckBox chkAvailStatus = (HtmlInputCheckBox)itemGrid.Rows[Requisition2DT.Rows.IndexOf(row)].FindControl("chkAvailStatus");
+                if (chkAvailStatus != null)
+                {
+                    chkAvailStatus.Checked = availableStatus;
+                }
+            }
+        }
+
+        // calculating totl aervice amount if checkboxs are pre-checked
+        double totalBill = 0.00;
+        foreach (GridViewRow row in itemGrid.Rows)
+        {
+            int rowIndex = row.RowIndex;
+
+            double servicePrice = Convert.ToDouble(Requisition2DT.Rows[rowIndex]["ServicePrice"]);
+
+            string availableStatus = ((HtmlInputCheckBox)row.FindControl("chkAvailStatus")).Checked.ToString(); // input - checkbox
+
+            if (availableStatus == "True")
+            {
+                totalBill = totalBill + servicePrice;
+            }
+        }
+
+        TotalServiceAmnt.Text = totalBill.ToString("N2");
+    }
+
+
+
+
+
+
+    //=========================={ Calculate Button Event }==========================
+    protected void btnTotalBill_Click(object sender, EventArgs e)
+    {
+        DataTable requisition2DT = (DataTable)Session["ReqDetails"]; // requisition 2 details
+
+        double totalBill = 0.00;
+
+        // calculating totl aervice amount
+        foreach (GridViewRow row in itemGrid.Rows)
+        {
+            int rowIndex = row.RowIndex;
+
+            double servicePrice = Convert.ToDouble(requisition2DT.Rows[rowIndex]["ServicePrice"]);
+
+            string availableStatus = ((HtmlInputCheckBox)row.FindControl("chkAvailStatus")).Checked.ToString(); // input - checkbox
+
+            if (availableStatus == "True")
+            {
+                totalBill = totalBill + servicePrice;
+            }
+
+            TotalServiceAmnt.Text = totalBill.ToString("N2");
         }
     }
 
@@ -371,15 +507,15 @@ public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Pa
         // updating item details
         InsertAvailableServices(reqReferenceNo);
 
-        getSweetAlertSuccessRedirectMandatory("Service(s) Received!", "Available services received", "");
+        getSweetAlertSuccessRedirectMandatory("Service(s) Received!", "Available Services Received", "");
     }
 
 
     private void InsertAvailableServices(string reqReferenceNo)
     {
-        string reqlRefno = reqReferenceNo;
+        string requisition1Refno = reqReferenceNo;
 
-        DataTable billItemsDT = (DataTable)Session["ReqDetails"]; // requisition 2 details
+        DataTable requisition2DT = (DataTable)Session["ReqDetails"]; // requisition 2 details
 
         using (SqlConnection con = new SqlConnection(connectionString))
         {
@@ -389,38 +525,59 @@ public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Pa
             {
                 int rowIndex = row.RowIndex;
 
-                string serviceName = billItemsDT.Rows[rowIndex]["ServiceName"].ToString();
-                string cellEnlistName = billItemsDT.Rows[rowIndex]["NmeCell"].ToString();
-                string qty = billItemsDT.Rows[rowIndex]["Quty"].ToString();
-                string comments = billItemsDT.Rows[rowIndex]["Comment"].ToString();
+                string requisition2Refno = requisition2DT.Rows[rowIndex]["RefNo"].ToString();
+                string serviceName = requisition2DT.Rows[rowIndex]["ServiceName"].ToString();
+                string cellEnlistName = requisition2DT.Rows[rowIndex]["NmeCell"].ToString();
+                string qty = requisition2DT.Rows[rowIndex]["Quty"].ToString();
+                double servicePrice = Convert.ToDouble(requisition2DT.Rows[rowIndex]["ServicePrice"]);
 
-                string itemRefNo = billItemsDT.Rows[rowIndex]["RefNo"].ToString();
+                //bool availableStatus = ((CheckBox)row.FindControl("chkAvailStatus")).Checked; // asp:checkox
+                //bool availableStatus = ((HtmlInputCheckBox)row.FindControl("chkAvailStatus")).Checked; // input - checkbox
+                //int availableStatusValue = ((HtmlInputCheckBox)row.FindControl("chkAvailStatus")).Checked ? 1 : 0;
+
+                string availableQty = ((TextBox)row.FindControl("txtAvailableQty")).Text; // editable text field
+                string availableStatus = ((HtmlInputCheckBox)row.FindControl("chkAvailStatus")).Checked.ToString(); // input - checkbox
+
+                double totalServiceAmount = Convert.ToDouble(TotalServiceAmnt.Text);
 
 
 
-                bool isItemExists = IsItemExists(itemRefNo);
 
-                if (isItemExists) // true - update
+                string reqRefNo = requisition2DT.Rows[rowIndex]["RefNo"].ToString();
+
+                bool isItemExists = IsItemExists(reqRefNo);
+
+                if (isItemExists) // update
                 {
-
-                }
-                else // false - insert
-                {
-                    // getting new ref id for item
-                    string itemRefNoNew = GetItemRefNo().ToString();
-
-                    string sql = $@"INSERT INTO Requisition2891 
-                                    (RefNo, BillRefNo, ServiceName, NmeCell, Quty, Comment) 
-                                    VALUES 
-                                    (@RefNo, @BillRefNo, @ServiceName, @NmeCell, @Quty, @Comment)";
+                    string sql = $@"UPDATE ReqReceived891 SET 
+                                    AvailableQty=@AvailableQty, AvailableStatus=@AvailableStatus 
+                                    WHERE Req2RefNo=@Req2RefNo";
 
                     SqlCommand cmd = new SqlCommand(sql, con);
-                    cmd.Parameters.AddWithValue("@RefNo", itemRefNoNew);
-                    cmd.Parameters.AddWithValue("@BillRefNo", reqlRefno);
+                    cmd.Parameters.AddWithValue("@AvailableQty", availableQty);
+                    cmd.Parameters.AddWithValue("@AvailableStatus", availableStatus);
+                    cmd.Parameters.AddWithValue("@Req2RefNo", requisition2Refno);
+                    cmd.ExecuteNonQuery();
+                }
+                else // insert
+                {
+                    // getting new ref id for item
+                    string reqReceivedNewRefNo = GetItemRefNo().ToString();
+
+                    string sql = $@"INSERT INTO ReqReceived891 
+                                    (RefNo, Req2RefNo, ServiceName, CellName, ReqQty, AvailableQty, ServicePrice, AvailableStatus) 
+                                    VALUES 
+                                    (@RefNo, @Req2RefNo, @ServiceName, @CellName, @ReqQty, @AvailableQty, @ServicePrice, @AvailableStatus)";
+
+                    SqlCommand cmd = new SqlCommand(sql, con);
+                    cmd.Parameters.AddWithValue("@RefNo", reqReceivedNewRefNo);
+                    cmd.Parameters.AddWithValue("@Req2RefNo", requisition2Refno);
                     cmd.Parameters.AddWithValue("@ServiceName", serviceName);
-                    cmd.Parameters.AddWithValue("@NmeCell", cellEnlistName);
-                    cmd.Parameters.AddWithValue("@Quty", qty);
-                    cmd.Parameters.AddWithValue("@Comment", comments);
+                    cmd.Parameters.AddWithValue("@CellName", cellEnlistName);
+                    cmd.Parameters.AddWithValue("@ReqQty", qty);
+                    cmd.Parameters.AddWithValue("@AvailableQty", availableQty);
+                    cmd.Parameters.AddWithValue("@ServicePrice", servicePrice);
+                    cmd.Parameters.AddWithValue("@AvailableStatus", availableStatus);
                     cmd.ExecuteNonQuery();
                 }
             }
@@ -430,15 +587,15 @@ public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Pa
 
     }
 
-    private bool IsItemExists(string itemRefNo)
+    private bool IsItemExists(string reqRefNo)
     {
         using (SqlConnection con = new SqlConnection(connectionString))
         {
             con.Open();
-            string sql = "select * from Requisition2891 where RefNo = @RefNo";
+            string sql = "select * from ReqReceived891 where Req2RefNo = @Req2RefNo";
 
             SqlCommand cmd = new SqlCommand(sql, con);
-            cmd.Parameters.AddWithValue("@RefNo", itemRefNo);
+            cmd.Parameters.AddWithValue("@Req2RefNo", reqRefNo);
             cmd.ExecuteNonQuery();
 
             SqlDataAdapter ad = new SqlDataAdapter(cmd);
@@ -459,7 +616,7 @@ public partial class Requisition_Received_RequisitionReceived : System.Web.UI.Pa
         using (SqlConnection con = new SqlConnection(connectionString))
         {
             con.Open();
-            string sql = "SELECT ISNULL(MAX(CAST(RefNo AS INT)), 10000) + 1 AS NextRefID FROM Requisition2891";
+            string sql = "SELECT ISNULL(MAX(CAST(RefNo AS INT)), 10000) + 1 AS NextRefID FROM ReqReceived891";
             SqlCommand cmd = new SqlCommand(sql, con);
 
             object result = cmd.ExecuteScalar();

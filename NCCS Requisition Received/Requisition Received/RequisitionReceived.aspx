@@ -125,7 +125,9 @@
                                 <ItemStyle CssClass="col-md-1" />
                             </asp:TemplateField>
                             <asp:BoundField DataField="ReqNo" HeaderText="Requisition Number" ItemStyle-CssClass="col-xs-3 align-middle text-start fw-light" />
-                            <asp:BoundField DataField="ReqDte" HeaderText="Requisition Date" ItemStyle-CssClass="col-xs-3 align-middle text-start fw-light" />
+                            <asp:BoundField DataField="OrgTyp" HeaderText="Organization Type" ItemStyle-CssClass="col-xs-3 align-middle text-start fw-light" />
+                            <asp:BoundField DataField="ReqDte" HeaderText="Requisition Date" ItemStyle-CssClass="col-xs-3 align-middle text-start fw-light" DataFormatString="{0:dd/MM/yyyy}" />
+
                             <asp:TemplateField HeaderText="Action">
                                 <ItemTemplate>
                                     <asp:LinkButton runat="server" ID="btnedit" CommandArgument='<%# Eval("RefNo") %>' CommandName="lnkView" ToolTip="Edit" CssClass="shadow-sm">
@@ -134,6 +136,7 @@
                                 </ItemTemplate>
                                 <ItemStyle HorizontalAlign="Center" Width="100px" />
                             </asp:TemplateField>
+
                         </Columns>
                     </asp:GridView>
                 </div>
@@ -196,10 +199,11 @@
 
                     <!-- Item GridView Starts -->
                     <div id="itemDiv" runat="server" visible="false" class="mt-3 mb-3">
-                        <asp:GridView ShowHeaderWhenEmpty="true" ID="itemGrid" runat="server" AutoGenerateColumns="false"
+                        <asp:GridView ShowHeaderWhenEmpty="true" ID="itemGrid" runat="server" AutoGenerateColumns="false" OnRowDataBound="ItemGrid_RowDataBound"
                             CssClass="table table-bordered  border border-1 border-dark-subtle text-center grid-custom mb-3">
                             <HeaderStyle CssClass="align-middle" />
                             <Columns>
+
                                 <asp:TemplateField ControlStyle-CssClass="col-md-1" HeaderText="Sr.No">
                                     <ItemTemplate>
                                         <asp:HiddenField ID="id" runat="server" Value="id" />
@@ -210,15 +214,56 @@
                                     <ItemStyle CssClass="col-md-1" />
                                     <ItemStyle Font-Size="15px" />
                                 </asp:TemplateField>
+
                                 <asp:BoundField DataField="ServName" HeaderText="Cell/Service Name" ItemStyle-Font-Size="15px" ItemStyle-CssClass="align-middle text-start fw-light" />
                                 <asp:BoundField DataField="NmeCell" HeaderText="Cell/Service Name (Manual)" ItemStyle-Font-Size="15px" ItemStyle-CssClass="align-middle text-start fw-light" />
                                 <asp:BoundField DataField="Quty" HeaderText="Required Qty" ItemStyle-Font-Size="15px" ItemStyle-CssClass="align-middle text-start fw-light" />
+
+                                <asp:TemplateField HeaderText="Available Qty" ItemStyle-Font-Size="15px" ItemStyle-CssClass="col-md-2 align-middle">
+                                    <ItemTemplate>
+                                        <asp:TextBox ID="txtAvailableQty" Text='<%# Bind("AvailableQty") %>' type="number" step="any" runat="server" Enabled="true" CssClass="col-md-12 fw-light border border-secondary-subtle shadow-sm rounded-1 py-1 px-2"></asp:TextBox>
+                                    </ItemTemplate>
+                                </asp:TemplateField>
+
+                                <asp:BoundField DataField="ServicePrice" HeaderText="Service Price" ItemStyle-Font-Size="15px" ItemStyle-CssClass="align-middle text-start fw-light" />
+
+                                <asp:TemplateField HeaderText="Available Status">
+                                    <ItemTemplate>
+                                        <%--<asp:CheckBox ID="chkAvailStatus" runat="server" Checked='<%# Convert.ToBoolean(Eval("AvailableStatus")) %>' CssClass="ChkBoxClass" />--%>
+                                        <input type="checkbox" id="chkAvailStatus" style="width: 1.7em; height: 1.7em; display: inline-block;" runat="server" />
+                                    </ItemTemplate>
+                                    <ItemStyle HorizontalAlign="Center" Width="50px" />
+                                </asp:TemplateField>
+
                             </Columns>
                         </asp:GridView>
-
-                        <hr class="border border-secondary-subtle" />
                     </div>
                     <!-- Item GridView Ends -->
+
+
+
+                    <!-- Calculate Button -->
+                    <div class="mb-3 mt-5">
+                        <div class="row">
+                            <div class="col-md-6 text-start"></div>
+                            <div class="col-md-6 text-end">
+                                <asp:Button ID="btnTotalBill" runat="server" Text="Calculate" OnClick="btnTotalBill_Click" CssClass="btn btn-custom text-white shadow" />
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Total Bill -->
+                    <div class="row px-0">
+                        <div class="col-md-9"></div>
+                        <div class="col-md-3 align-self-end text-end">
+                            <asp:Literal ID="Literal6" Text="" runat="server">Total Service Amount</asp:Literal>
+                            <div class="input-group">
+                                <span class="input-group-text fs-5 fw-semibold">₹</span>
+                                <asp:TextBox runat="server" ID="TotalServiceAmnt" CssClass="form-control fw-lighter border border-2" ReadOnly="true" placeholder="Total Service Amount"></asp:TextBox>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Submit Button -->
                     <div class="">
@@ -227,7 +272,7 @@
                                 <asp:Button ID="btnBack" runat="server" Text="Back" OnClick="btnBack_Click" CssClass="btn btn-custom text-white shadow mb-5" />
                             </div>
                             <div class="col-md-6 text-end">
-                                <asp:Button ID="btnSubmit" Enabled="false" runat="server" Text="Submit" OnClick="btnSubmit_Click" ValidationGroup="finalSubmit" CssClass="btn btn-custom text-white shadow mb-5" />
+                                <asp:Button ID="btnSubmit" runat="server" Text="Submit" OnClick="btnSubmit_Click" ValidationGroup="finalSubmit" CssClass="btn btn-custom text-white shadow mb-5" />
                             </div>
                         </div>
                     </div>
