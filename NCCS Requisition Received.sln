@@ -26,8 +26,6 @@ Project("{E24C65DC-7377-472B-9ABA-BC803B73C61A}") = "NCCS Requisition Received",
 	EndProjectSection
 EndProject
 Global
-
-
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 	EndGlobalSection
