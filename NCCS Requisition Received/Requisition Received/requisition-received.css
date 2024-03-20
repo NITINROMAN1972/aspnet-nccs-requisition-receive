@@ -1,6 +1,10 @@
 ﻿body {
 }
 
+.additional-row1 {
+    display: none;
+}
+
 /* grid background color */
 .grid-custom th {
     background-color: #4f64cc !important;
